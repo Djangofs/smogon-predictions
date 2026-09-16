@@ -23,10 +23,10 @@ type MatchupPrediction = {
   week: number
   format: string
   matchup: string
-  actualWinner: string
+  actualWinner: string | null
   totalPredictions: number
-  winnerShare: number
-  upset: 'Low' | 'Medium' | 'High'
+  winnerShare: number | null
+  upset: 'Low' | 'Medium' | 'High' | null
   options: MatchupOption[]
 }
 
@@ -46,6 +46,15 @@ type ViewName = 'overview' | 'predictions'
 
 const getActualWinnerPercentage = (matchup: MatchupPrediction) => {
   return matchup.options.find((option) => option.player === matchup.actualWinner)?.percentage ?? 0
+}
+
+const getUpsetValue = (matchup: MatchupPrediction) => {
+  const favoriteShare = matchup.options[0].percentage
+  if (matchup.actualWinner === null) {
+    const runnerUpShare = matchup.options[1]?.percentage ?? 0
+    return Math.max(0, favoriteShare - runnerUpShare)
+  }
+  return Math.max(0, favoriteShare - getActualWinnerPercentage(matchup))
 }
 
 const navItems: { id: ViewName; label: string }[] = [
@@ -83,12 +92,6 @@ function App() {
     if (value !== 'All Formats') setSelectedWeek('All')
   }
 
-  const currentWeek = useMemo(() => {
-    if (!data) return 'All'
-    if (selectedWeek === 'All') return data.weeks[0]?.toString() ?? 'All'
-    return selectedWeek
-  }, [data, selectedWeek])
-
   const orderedOverallResults = useMemo(() => {
     if (!data) return []
 
@@ -108,7 +111,7 @@ function App() {
 
     const rows = data.matchupPredictions.filter((matchup) => {
       if (selectedFormat !== 'All Formats' && matchup.format !== selectedFormat) return false
-      if (currentWeek !== 'All' && matchup.week !== Number(currentWeek)) return false
+      if (selectedWeek !== 'All' && matchup.week !== Number(selectedWeek)) return false
       return true
     })
 
@@ -120,12 +123,15 @@ function App() {
       })
     }
 
-    return [...rows].sort((a, b) => {
-      const aValue = Math.max(0, a.options[0].percentage - getActualWinnerPercentage(a))
-      const bValue = Math.max(0, b.options[0].percentage - getActualWinnerPercentage(b))
-      return bValue - aValue
-    })
-  }, [currentWeek, data, predictionSort, selectedFormat])
+    if (predictionSort === 'Week') {
+      return [...rows].sort((a, b) => {
+        if (b.week !== a.week) return b.week - a.week
+        return b.totalPredictions - a.totalPredictions
+      })
+    }
+
+    return [...rows].sort((a, b) => getUpsetValue(b) - getUpsetValue(a))
+  }, [data, predictionSort, selectedFormat, selectedWeek])
 
   if (!data) {
     return <div className="loading-shell">Loading tournament data…</div>
@@ -235,6 +241,7 @@ function App() {
                 <select value={predictionSort} onChange={(event) => setPredictionSort(event.target.value)}>
                   <option>Biggest upset</option>
                   <option>Closest</option>
+                  <option>Week</option>
                 </select>
               </label>
             </div>
@@ -271,7 +278,7 @@ function App() {
                         ))}
                       </div>
                     </td>
-                    <td>{matchup.actualWinner}</td>
+                    <td>{matchup.actualWinner ?? 'Pending'}</td>
                   </tr>
                 ))}
               </tbody>

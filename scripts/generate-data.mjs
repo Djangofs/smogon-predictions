@@ -189,7 +189,7 @@ const parseBbCodeResults = (filePath) => {
     const playerA = valueMatch ? stripBbCode(valueMatch[1]).trim() : '';
     const playerB = valueMatch ? stripBbCode(valueMatch[2]).trim() : '';
     const boldMatch = value.match(/\[B\](.*?)\[\/B\]/i);
-    const winner = boldMatch ? stripBbCode(boldMatch[1]) : stripBbCode(value.split(/\s+vs\s+/i)[0]);
+    const winner = boldMatch ? stripBbCode(boldMatch[1]) : '';
 
     rows.push({
       Week: String(week),
@@ -312,12 +312,12 @@ for (const row of resultRows) {
 
   if (format && matchup) {
     const matchupKey = `${weekValue}|${format}|${matchup}`;
-    resultsMap.set(matchupKey, winner);
+    if (winner) resultsMap.set(matchupKey, winner);
 
     if (slot !== null && slot !== undefined) {
       const slotKey = `${weekValue}|${format}|${matchup}|${slot}`;
       slotMatchupMap.set(slotKey, matchup);
-      resultsMap.set(slotKey, winner);
+      if (winner) resultsMap.set(slotKey, winner);
 
       if (playerA && playerB) {
         slotPlayerMap.set(slotKey, { playerA, playerB });
@@ -363,13 +363,13 @@ for (const row of predictionRows) {
       continue;
     }
 
-    const actualWinner = resultsMap.get(slotKey) ?? resultsMap.get(matchupKey);
-    if (!actualWinner) continue;
-
     const normalizedValue = value.trim();
     const matchupBucket = matchupCounts.get(slotKey ?? matchupKey) ?? {};
     matchupBucket[normalizedValue] = (matchupBucket[normalizedValue] ?? 0) + 1;
     matchupCounts.set(slotKey ?? matchupKey, matchupBucket);
+
+    const actualWinner = resultsMap.get(slotKey) ?? resultsMap.get(matchupKey);
+    if (!actualWinner) continue;
 
     const isCorrect = normalizedValue === actualWinner;
 
@@ -435,15 +435,21 @@ for (const [key, values] of matchupCounts.entries()) {
 
   const totalPredictions = players.reduce((sum, player) => sum + player.predictions, 0);
   const popular = players.sort((a, b) => b.percentage - a.percentage)[0];
-  const actualWinner = resultsMap.get(key);
+  const actualWinner = resultsMap.get(key) ?? null;
   const actualPlayers = slotPlayerMap.get(key) ?? null;
   const displayPlayers = actualPlayers ? `${actualPlayers.playerA} vs ${actualPlayers.playerB}` : normalizeMatchup(matchup);
-  const actualShare = players.find((player) => player.player === actualWinner)?.percentage ?? 0;
-  const favoriteShare = popular?.percentage ?? 0;
-  const upsetValue = Math.max(0, favoriteShare - actualShare);
-  let upset = 'Low';
-  if (upsetValue >= 35) upset = 'High';
-  else if (upsetValue >= 15) upset = 'Medium';
+
+  let winnerShare = null;
+  let upset = null;
+  if (actualWinner) {
+    const actualShare = players.find((player) => player.player === actualWinner)?.percentage ?? 0;
+    const favoriteShare = popular?.percentage ?? 0;
+    const upsetValue = Math.max(0, favoriteShare - actualShare);
+    winnerShare = actualShare;
+    upset = 'Low';
+    if (upsetValue >= 35) upset = 'High';
+    else if (upsetValue >= 15) upset = 'Medium';
+  }
 
   matchupPredictions.push({
     week: Number(week),
@@ -452,7 +458,7 @@ for (const [key, values] of matchupCounts.entries()) {
     slot: slot ? Number(slot) : null,
     actualWinner,
     totalPredictions,
-    winnerShare: actualShare,
+    winnerShare,
     upset,
     options: players.sort((a, b) => b.percentage - a.percentage),
   });
