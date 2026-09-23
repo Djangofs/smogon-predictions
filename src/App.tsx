@@ -24,6 +24,7 @@ type MatchupPrediction = {
   format: string
   matchup: string
   actualWinner: string | null
+  voided: boolean
   totalPredictions: number
   winnerShare: number | null
   upset: 'Low' | 'Medium' | 'High' | null
@@ -278,7 +279,7 @@ function App() {
                         ))}
                       </div>
                     </td>
-                    <td>{matchup.actualWinner ?? 'Pending'}</td>
+                    <td>{matchup.voided ? 'Voided' : matchup.actualWinner ?? 'Pending'}</td>
                   </tr>
                 ))}
               </tbody>

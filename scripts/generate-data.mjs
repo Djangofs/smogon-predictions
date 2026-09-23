@@ -326,8 +326,44 @@ for (const row of resultRows) {
   }
 }
 
-const predictorMap = new Map();
 const matchupCounts = new Map();
+
+for (const row of predictionRows) {
+  for (const header of predictionColumns) {
+    const parsed = parsePredictionHeader(header);
+    if (!parsed) continue;
+
+    const value = String(row[header] ?? '').trim();
+    if (!value) continue;
+
+    const weekNumber = Number(parsed.week ?? row.__week ?? 1);
+    const slotKey = parsed.slot ? `${weekNumber}|${parsed.format}|${parsed.matchup}|${parsed.slot}` : null;
+    const matchupKey = `${weekNumber}|${parsed.format}|${parsed.matchup}`;
+    const actualMatchup = slotKey ? slotMatchupMap.get(slotKey) : null;
+    if (slotKey && actualMatchup && actualMatchup !== parsed.matchup) {
+      continue;
+    }
+
+    const normalizedValue = value.trim();
+    const bucketKey = slotKey ?? matchupKey;
+    const matchupBucket = matchupCounts.get(bucketKey) ?? {};
+    matchupBucket[normalizedValue] = (matchupBucket[normalizedValue] ?? 0) + 1;
+    matchupCounts.set(bucketKey, matchupBucket);
+  }
+}
+
+// A result is voided when the recorded winner isn't one of the options predictors
+// actually saw (e.g. a roster substitution happened after predictions locked) —
+// it shouldn't count as a win or a loss for anyone.
+const voidedKeys = new Set();
+for (const [key, values] of matchupCounts.entries()) {
+  const winner = resultsMap.get(key);
+  if (winner && !(winner in values)) {
+    voidedKeys.add(key);
+  }
+}
+
+const predictorMap = new Map();
 const weeklyPredictors = new Map();
 const formatPredictors = new Map();
 
@@ -363,14 +399,12 @@ for (const row of predictionRows) {
       continue;
     }
 
-    const normalizedValue = value.trim();
-    const matchupBucket = matchupCounts.get(slotKey ?? matchupKey) ?? {};
-    matchupBucket[normalizedValue] = (matchupBucket[normalizedValue] ?? 0) + 1;
-    matchupCounts.set(slotKey ?? matchupKey, matchupBucket);
+    if (voidedKeys.has(slotKey ?? matchupKey)) continue;
 
     const actualWinner = resultsMap.get(slotKey) ?? resultsMap.get(matchupKey);
     if (!actualWinner) continue;
 
+    const normalizedValue = value.trim();
     const isCorrect = normalizedValue === actualWinner;
 
     if (isCorrect) {
@@ -435,7 +469,8 @@ for (const [key, values] of matchupCounts.entries()) {
 
   const totalPredictions = players.reduce((sum, player) => sum + player.predictions, 0);
   const popular = players.sort((a, b) => b.percentage - a.percentage)[0];
-  const actualWinner = resultsMap.get(key) ?? null;
+  const voided = voidedKeys.has(key);
+  const actualWinner = voided ? null : resultsMap.get(key) ?? null;
   const actualPlayers = slotPlayerMap.get(key) ?? null;
   const displayPlayers = actualPlayers ? `${actualPlayers.playerA} vs ${actualPlayers.playerB}` : normalizeMatchup(matchup);
 
@@ -457,6 +492,7 @@ for (const [key, values] of matchupCounts.entries()) {
     matchup: displayPlayers,
     slot: slot ? Number(slot) : null,
     actualWinner,
+    voided,
     totalPredictions,
     winnerShare,
     upset,
