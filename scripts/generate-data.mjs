@@ -168,7 +168,7 @@ const parseBbCodeResults = (filePath) => {
     const trimmed = String(line).trim();
     if (!trimmed) continue;
 
-    const teamMatch = trimmed.match(/^([A-Za-z][A-Za-z0-9 .'-]+?)\s+\(\d+\)\s+vs\s+\(\d+\)\s+([A-Za-z][A-Za-z0-9 .'-]+?)$/);
+    const teamMatch = stripBbCode(trimmed).match(/^([A-Za-z][A-Za-z0-9 .'-]+?)\s+\(\d+\)\s+vs\s+\(\d+\)\s+([A-Za-z][A-Za-z0-9 .'-]+?)$/);
     if (teamMatch) {
       const leftName = stripBbCode(teamMatch[1]);
       const rightName = stripBbCode(teamMatch[2]);
