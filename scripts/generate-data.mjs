@@ -46,14 +46,46 @@ const findSourceFiles = () => {
   return { predictionFiles, resultFiles };
 };
 
+// Named knockout stages, in order. They're numbered after the last regular week.
+const namedStages = [
+  { key: 'semis', label: 'Semis' },
+  { key: 'finals', label: 'Finals' },
+];
+const stageWeekNumbers = new Map();
+
+const sourceBasename = (sourceFile) => path.basename(sourceFile, path.extname(sourceFile)).toLowerCase();
+
+const assignStageWeekNumbers = (sourceFiles) => {
+  const numberedWeeks = sourceFiles
+    .map((sourceFile) => sourceBasename(sourceFile).match(/(\d+)/))
+    .filter(Boolean)
+    .map((match) => Number(match[1]));
+  let nextWeek = Math.max(0, ...numberedWeeks) + 1;
+
+  for (const stage of namedStages) {
+    if (sourceFiles.some((sourceFile) => sourceBasename(sourceFile) === stage.key)) {
+      stageWeekNumbers.set(stage.key, { week: nextWeek, label: stage.label });
+      nextWeek += 1;
+    }
+  }
+};
+
 const resolveWeekNumber = (sourceFile, fallbackValue) => {
-  const basename = path.basename(sourceFile, path.extname(sourceFile));
+  const basename = sourceBasename(sourceFile);
   const match = basename.match(/(\d+)/);
   if (match) return Number(match[1]);
 
+  const stage = stageWeekNumbers.get(basename);
+  if (stage) return stage.week;
+
   const numericFallback = Number(fallbackValue ?? 0);
-  return Number.isFinite(numericFallback) && numericFallback > 0 ? numericFallback : 1;
+  if (Number.isFinite(numericFallback) && numericFallback > 0) return numericFallback;
+
+  throw new Error(`Can't determine the week for ${sourceFile}: name it weekN or one of ${namedStages.map((s) => s.key).join(', ')}.`);
 };
+
+const weekLabel = (week) =>
+  [...stageWeekNumbers.values()].find((stage) => stage.week === week)?.label ?? `Week ${week}`;
 
 const detectDelimiter = (content) => {
   const lines = content.split(/\r?\n/).filter(Boolean);
@@ -277,6 +309,7 @@ const buildLeaderboards = (predictorEntries) => {
 };
 
 const { predictionFiles, resultFiles } = findSourceFiles();
+assignStageWeekNumbers([...predictionFiles, ...resultFiles]);
 const predictionRows = predictionFiles.flatMap((filePath) =>
   parseCsv(filePath).map((row) => ({ ...row, __week: resolveWeekNumber(filePath, row.Week ?? row['Week']) })),
 );
@@ -508,6 +541,7 @@ matchupPredictions.sort((a, b) => {
 const generatedData = {
   title: 'SCL VI Prediction Tournament',
   weeks,
+  weekLabels: Object.fromEntries(weeks.map((week) => [String(week), weekLabel(week)])),
   formats,
   totalPredictors: predictorEntries.length,
   totalMatchups: matchupPredictions.length,

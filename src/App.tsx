@@ -34,6 +34,7 @@ type MatchupPrediction = {
 type DataSet = {
   title: string
   weeks: number[]
+  weekLabels?: Record<string, string>
   formats: string[]
   totalPredictors: number
   totalMatchups: number
@@ -58,7 +59,9 @@ const getUpsetValue = (matchup: MatchupPrediction) => {
   return Math.max(0, favoriteShare - getActualWinnerPercentage(matchup))
 }
 
-const navItems: { id: ViewName; label: string }[] = [
+const getWeekLabel = (data: DataSet, week: number) => data.weekLabels?.[String(week)] ?? `Week ${week}`
+
+const navItems:{ id: ViewName; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'predictions', label: 'Predictions' },
 ]
@@ -167,7 +170,7 @@ function App() {
               <option value="All">All Weeks</option>
               {data.weeks.map((week) => (
                 <option key={week} value={String(week)}>
-                  Week {week}
+                  {getWeekLabel(data, week)}
                 </option>
               ))}
             </select>
@@ -259,7 +262,7 @@ function App() {
               <tbody>
                 {sortedPredictionRows.map((matchup) => (
                   <tr key={`${matchup.week}-${matchup.format}-${matchup.matchup}`}>
-                    <td>Week {matchup.week}</td>
+                    <td>{getWeekLabel(data, matchup.week)}</td>
                     <td>{matchup.format}</td>
                     <td>{matchup.matchup}</td>
                     <td className="distribution-cell">
